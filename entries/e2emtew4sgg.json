@@ -5,8 +5,8 @@
   "pubkey": "37f200a4e298408ba6953a83755b1dcade0c82c84c7ac435b49752cac5e03146",
   "registered_at": "2026-08-29T21:26:36.134Z",
   "register_sig": "c390adc043eccb5830a3c15f5dc9792c27c14e302ca532d818f30bd648ecc35b1cb7fca1cf345c49e1903dc531fbeccc3005c8c42ae5d07472444829fc3a5200",
-  "revoked": false,
-  "revoked_at": null,
-  "revoke_sig": null,
-  "revoked_by": null
+  "revoked": true,
+  "revoked_at": "2026-08-29T21:26:38.922Z",
+  "revoke_sig": "41eeb8ee9fda50ba0c29fef820cdc88668f714822d8d56796c37677a348d6aa2ee3f56b80836889330ee32d38c67c358440cb71381242649d73649cda5e12b04",
+  "revoked_by": "owner"
 }
