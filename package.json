@@ -1,0 +1,9 @@
+{
+  "name": "arkadia-arkmap-identity-registry",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Gateway rejestru tożsamości ArkMap (Vercel serverless + GitHub Contents API)",
+  "engines": {
+    "node": "20.x"
+  }
+}
