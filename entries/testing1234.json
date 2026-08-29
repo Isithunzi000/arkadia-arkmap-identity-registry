@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "nick": "testing1234",
+  "author_id": "3063c464753accee",
+  "pubkey": "6b2dd1a980c0fa46cf8f5b4d592f977b46c4b6cbad6f6349692807379dae798c",
+  "registered_at": "2026-08-29T23:53:16.033Z",
+  "register_sig": "5607bb9416b4cb67284382cb763328f5ccbb392e0efe104ff2ea9e0723c2da7b0b118539454ce646549050c21e5ce959f50f182c07aaf558f7f91c6d6432550f",
+  "revoked": false,
+  "revoked_at": null,
+  "revoke_sig": null,
+  "revoked_by": null
+}
