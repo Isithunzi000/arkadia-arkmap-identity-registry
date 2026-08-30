@@ -48,12 +48,22 @@ function validateRevokeBody(body) {
   return null;
 }
 
+// Czytelne uzasadnienia 400 (dla deva wywołującego API) — kody invalid_* bez zmian.
+const INVALID_FIELD_MSG = {
+  body: 'expected JSON object: {nick, pubkey, author_id, sig} for register, {nick, sig} for revoke',
+  nick: 'nick: string matching /^[a-z0-9]{1,32}$/',
+  pubkey: 'pubkey: 64 lowercase hex chars (Ed25519 public key)',
+  author_id: 'author_id: 16 lowercase hex chars (first 16 hex of sha256(pubkey))',
+  sig: 'sig: 128 lowercase hex chars (Ed25519 signature)',
+};
+
 // ── Krypto (Node 20 webcrypto, Ed25519) ─────────────────────────────────────
 async function ed25519Verify(pubkeyHex, sigHex, message) {
   try {
     const key = await webcrypto.subtle.importKey('raw', Buffer.from(pubkeyHex, 'hex'), { name: 'Ed25519' }, false, ['verify']);
     return await webcrypto.subtle.verify('Ed25519', key, Buffer.from(sigHex, 'hex'), Buffer.from(message, 'utf8'));
   } catch (e) {
+    console.warn('ed25519Verify wyjatek (zdeformowany klucz/podpis):', e && e.message ? e.message : e);
     return false;  // zdeformowany klucz/podpis = po prostu nieważny dowód
   }
 }
@@ -93,7 +103,7 @@ async function ghWriteEntry(token, nick, entry, sha, message) {
 // deps: { token, now() -> ISO, read(nick) -> {status, sha?, entry?}, write(nick, entry, sha, msg) -> {ok, status} }
 async function handleRegister(deps, body) {
   const bad = validateRegisterBody(body);
-  if (bad) return { code: 400, json: { error: 'invalid_' + bad } };
+  if (bad) return { code: 400, json: { error: 'invalid_' + bad, message: INVALID_FIELD_MSG[bad] } };
 
   const { nick, pubkey, author_id, sig } = body;
   if (author_id !== authorIdOf(pubkey)) return { code: 400, json: { error: 'author_id_mismatch' } };
@@ -122,6 +132,7 @@ async function handleRegister(deps, body) {
       if (w.status === 409 || w.status === 422) continue;  // wyścig o utworzenie — odczytaj jeszcze raz
       return { code: 502, json: { error: 'registry_write_failed' } };
     }
+    if (cur.corrupt) return { code: 422, json: { error: 'corrupt_entry' } };  // wpis istnieje, ale JSON uszkodzony — wada DANYCH (naprawa w repo), nie infrastruktury; retry bezcelowe
     if (cur.status !== 200) return { code: 502, json: { error: 'registry_read_failed' } };
     const e = cur.entry;
     if (e.revoked) return { code: 410, json: { error: 'nick_revoked' } };              // wariant A: nick unieważniony na zawsze
@@ -134,12 +145,13 @@ async function handleRegister(deps, body) {
 // ── Handler unieważnienia ───────────────────────────────────────────────────
 async function handleRevoke(deps, body) {
   const bad = validateRevokeBody(body);
-  if (bad) return { code: 400, json: { error: 'invalid_' + bad } };
+  if (bad) return { code: 400, json: { error: 'invalid_' + bad, message: INVALID_FIELD_MSG[bad] } };
 
   const { nick, sig } = body;
   for (let attempt = 0; attempt < 3; attempt++) {
     const cur = await deps.read(nick);
     if (cur.status === 404) return { code: 404, json: { error: 'not_registered' } };
+    if (cur.corrupt) return { code: 422, json: { error: 'corrupt_entry' } };  // wpis istnieje, ale JSON uszkodzony — wada DANYCH (naprawa w repo), nie infrastruktury; retry bezcelowe
     if (cur.status !== 200) return { code: 502, json: { error: 'registry_read_failed' } };
     const e = cur.entry;
     if (e.revoked) return { code: 200, json: { status: 'already_revoked', entry: e } };  // idempotencja
@@ -163,6 +175,9 @@ async function handleRevoke(deps, body) {
 
 // ── Rate limit (best-effort, per-instancja serverless; twardym limitem jest
 //    serializacja na GitHub API) ─────────────────────────────────────────────
+// Rate limit: swiadomie best-effort per-instancja serverless (kazda instancja ma wlasny licznik).
+// Brak wspoldzielonego licznika (KV/Redis) — wlasciwa bramka jest PoP Ed25519: zly podpis = 403
+// PRZED jakimkolwiek zapisem. Limiter chroni wylacznie przed przepaleniem limitu wywolan Vercela.
 const _rl = new Map();
 function rateLimitHit(key, limit, windowMs, nowMs) {
   const now = nowMs || Date.now();

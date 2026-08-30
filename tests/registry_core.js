@@ -2,6 +2,7 @@
 // Harness logiki rdzenia rejestru (api/_core.js) — prawdziwe klucze Ed25519
 // (webcrypto), zamockowane GitHub Contents API w pamięci. Uruchom: node tests/registry_core.js
 const { webcrypto } = require('node:crypto');
+const fs = require('fs');
 const path = require('path');
 const core = require(path.join(__dirname, '..', 'api', '_core.js'));
 
@@ -65,6 +66,20 @@ const depsFor = (store) => ({
   ok(core.validateRegisterBody({ nick: 'ok', pubkey: 'zz', author_id: 'b'.repeat(16), sig: 'c'.repeat(128) }) === 'pubkey',
     'T1: zły pubkey -> invalid_pubkey');
   ok(core.validateRevokeBody({ nick: 'ok' }) === 'sig', 'T1: revoke bez sig -> invalid_sig');
+
+  // ── T1+ (Arc 46): błędne body -> 400 invalid_* Z czytelnym message (dla deva API) ──
+  {
+    const store = mkStore();
+    const r1 = await core.handleRegister(depsFor(store), null);
+    ok(r1.code === 400 && r1.json.error === 'invalid_body' && typeof r1.json.message === 'string' && r1.json.message.length > 0,
+      'T1+: register body nieobiektowe -> 400 invalid_body + message (Arc 46)');
+    const r2 = await core.handleRegister(depsFor(store), { nick: 'Z', pubkey: 'a'.repeat(64), author_id: 'b'.repeat(16), sig: 'c'.repeat(128) });
+    ok(r2.code === 400 && r2.json.error === 'invalid_nick' && /nick/.test(r2.json.message),
+      'T1+: register zły nick -> 400 invalid_nick + message o nicku (Arc 46)');
+    const r3 = await core.handleRevoke(depsFor(store), 'tekst');
+    ok(r3.code === 400 && r3.json.error === 'invalid_body' && typeof r3.json.message === 'string' && r3.json.message.length > 0,
+      'T1+: revoke body nieobiektowe -> 400 invalid_body + message (Arc 46)');
+  }
 
   // ── T2: author_id = first16(SHA-256(pubkey)) ──
   const idA = await mkIdentity('ala');
@@ -164,6 +179,35 @@ const depsFor = (store) => ({
     && core.rateLimitHit('t7', 2, 60000, 1002),
     'T7: trzecie żądanie w oknie -> limited');
   ok(!core.rateLimitHit('t7', 2, 60000, 1000 + 61000), 'T7: po oknie limit znika');
+
+  // ── T8 (Arc 46): uszkodzony wpis (corrupt JSON) -> 422 corrupt_entry, NIE 502; zero zapisu ──
+  {
+    const store = mkStore();
+    let writes = 0;
+    const deps = depsFor(store);
+    deps.read = async () => ({ status: 422, corrupt: true });        // ghReadEntry: JSON.parse padl
+    deps.write = async () => { writes++; return { ok: true, status: 201 }; };
+    const idF = await mkIdentity('f');
+    const sig = await idF.sign(core.registerPayload('f', idF.pubkey));
+    const r1 = await core.handleRegister(deps, { nick: 'f', pubkey: idF.pubkey, author_id: idF.author_id, sig });
+    ok(r1.code === 422 && r1.json.error === 'corrupt_entry',
+      'T8: register przy corrupt wpisie -> 422 corrupt_entry (Arc 46: rozroznienie od 502 registry_read_failed)');
+    const r2 = await core.handleRevoke(deps, { nick: 'f', sig: 'a'.repeat(128) });
+    ok(r2.code === 422 && r2.json.error === 'corrupt_entry',
+      'T8: revoke przy corrupt wpisie -> 422 corrupt_entry (Arc 46)');
+    ok(writes === 0, 'T8: corrupt nigdy nie dotyka zapisu (fail-stop przed write)');
+  }
+
+  // ── T9 (Arc 46): pin statyczny — wyjatki krypto sa logowane (console.warn w catch ed25519Verify) ──
+  {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'api', '_core.js'), 'utf8');
+    const iFn = src.indexOf('async function ed25519Verify');
+    const iCatch = src.indexOf('} catch (e) {', iFn);
+    const iEnd = src.indexOf('// ── GitHub Contents API', iFn);
+    ok(iFn > 0 && iCatch > iFn && iEnd > iCatch
+      && src.slice(iCatch, iEnd).includes('console.warn'),
+      'T9: ed25519Verify loguje wyjatki (console.warn w catch) — diagnostyka dev w logach Vercela (Arc 46)');
+  }
 
   console.log('\n═══ registry_core: ' + pass + ' OK, ' + fail + ' FAIL ═══');
   process.exit(fail ? 1 : 0);
