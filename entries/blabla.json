@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "nick": "blabla",
+  "author_id": "c2ac2389bab57518",
+  "pubkey": "ab783da7d484f37df531d24d828fa88d5bf85fd108f973260b0cc077da902fa3",
+  "registered_at": "2026-08-30T01:49:54.846Z",
+  "register_sig": "cd13b945520e37c524a2d6506d404e37886672dd5c71f96cc103e6cf49e7796259c4c638958a2da0fa408030c9f9aff82d9c23ba7ea8a44fcc0108e2a444b705",
+  "revoked": false,
+  "revoked_at": null,
+  "revoke_sig": null,
+  "revoked_by": null
+}
