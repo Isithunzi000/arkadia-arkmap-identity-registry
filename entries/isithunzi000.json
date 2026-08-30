@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "nick": "isithunzi000",
+  "author_id": "acb2d31010168b9e",
+  "pubkey": "4939ceb80de6f5dab630cb6246903eaa0a927d9c317387b6067b1bde10a8524e",
+  "registered_at": "2026-08-30T06:22:28.065Z",
+  "register_sig": "51cd0e61bff793955806cf37773f826b95be535a63a906449b70def1ef3ed9c38b8e0d622def568a0b4bfe454444cadf5296f7df353e84a76a00757bf77e6c0c",
+  "revoked": false,
+  "revoked_at": null,
+  "revoke_sig": null,
+  "revoked_by": null
+}
